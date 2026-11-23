@@ -17,6 +17,13 @@
 
 void SendCommands (char *buffer );
 
+struct StrokePoint
+{
+    float x; // X coordinate of the stroke point
+    float y; // Y coordinate of the stroke point
+    int pen; // Pen state: 0 for pen up, 1 for pen down
+};
+
 int read_name_and_count(FILE *file, char name[], int capacity, int *count)
 {
     char line[128];
@@ -103,9 +110,43 @@ int print_shape_count(char filename[])
         return 1;
     }
 
+        struct StrokePoint *points = calloc(point_count, sizeof(struct StrokePoint));
+    if (points == NULL) {
+        fclose(file);
+        printf("Could not allocate memory for the points\n");
+        return 1;
+    }
+
+    for (int i = 0; i < point_count; i++) {
+        int items_read = fscanf(file, "%f %f %d",
+                                &points[i].x, &points[i].y, &points[i].pen);
+
+        if (items_read != 3) {
+            free(points);
+            fclose(file);
+            printf("Could not read point %d of %s\n", i + 1, shape_name);
+            return 1;
+        }
+
+        if (points[i].pen != 0 && points[i].pen != 1) {
+            free(points);
+            fclose(file);
+            printf("Invalid pen value at point %d of %s\n", i + 1, shape_name);
+            return 1;
+        }
+    }
+
     fclose(file);
+
     printf("Number of shapes: %d\n", shape_count);
     printf("First shape: %s, points: %d\n", shape_name, point_count);
+
+    for (int i = 0; i < point_count; i++) {
+        printf("Point %d: X=%.2f Y=%.2f P=%d\n",
+               i + 1, points[i].x, points[i].y, points[i].pen);
+    }
+
+    free(points);
     return 0;
 }
 
