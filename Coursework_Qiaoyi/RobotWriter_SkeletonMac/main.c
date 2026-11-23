@@ -17,10 +17,106 @@
 
 void SendCommands (char *buffer );
 
+int read_name_and_count(FILE *file, char name[], int capacity, int *count)
+{
+    char line[128];
+    int position = 0;
+    int name_length = 0;
+    int digits = 0;
+    int value = 0;
+
+    if (fgets(line, 128, file) == NULL) {
+        return 1;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t') {
+        position++;
+    }
+
+    while (line[position] != ' ' && line[position] != '\t' &&
+           line[position] != '\n' && line[position] != '\r' &&
+           line[position] != '\0') {
+        if (name_length == capacity - 1) {
+            return 1;
+        }
+        name[name_length] = line[position];
+        name_length++;
+        position++;
+    }
+    name[name_length] = '\0';
+
+    if (name_length == 0 ||
+        (line[position] != ' ' && line[position] != '\t')) {
+        return 1;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t') {
+        position++;
+    }
+
+    while (line[position] >= '0' && line[position] <= '9') {
+        if (digits == 9) {
+            return 1;
+        }
+        value = value * 10 + (line[position] - '0');
+        digits++;
+        position++;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t' ||
+           line[position] == '\r') {
+        position++;
+    }
+
+    if (value <= 0 ||
+        (line[position] != '\n' && (line[position] != '\0' || !feof(file)))) {
+        return 1;
+    }
+
+    *count = value;
+    return 0;
+}
+
+int print_shape_count(char filename[])
+{
+    FILE *file = fopen(filename, "r");
+    char header[64];
+    char shape_name[64];
+    int shape_count;
+    int point_count;
+
+    if (file == NULL) {
+        printf("Could not open %s\n", filename);
+        return 1;
+    }
+
+    if (read_name_and_count(file, header, 64, &shape_count) != 0 ||
+        strcmp(header, "NumShapes") != 0) {
+        fclose(file);
+        printf("Invalid NumShapes header\n");
+        return 1;
+    }
+
+    if (read_name_and_count(file, shape_name, 64, &point_count) != 0) {
+        fclose(file);
+        printf("Invalid first shape header\n");
+        return 1;
+    }
+
+    fclose(file);
+    printf("Number of shapes: %d\n", shape_count);
+    printf("First shape: %s, points: %d\n", shape_name, point_count);
+    return 0;
+}
+
 int main()
 {
     char buffer[100];
- 
+
+    if (print_shape_count("test.txt") != 0) 
+    {
+        return 1;
+    }
     // If we cannot open the port then give up immediatly
     if ( CanRS232PortBeOpened() == -1 )
     {
