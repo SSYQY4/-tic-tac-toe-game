@@ -17,10 +17,193 @@
 
 void SendCommands (char *buffer );
 
+struct StrokePoint
+{
+    float x; // X coordinate of the stroke point
+    float y; // Y coordinate of the stroke point
+    int pen; // Pen state: 0 for pen up, 1 for pen down
+};
+
+struct Shape
+{
+    char name[64];
+    int point_count;
+    struct StrokePoint *points;
+};
+
+struct ShapeLibrary
+{
+    int shape_count;
+    struct Shape *shapes;
+};
+
+int read_name_and_count(FILE *file, char name[], int capacity, int *count)
+{
+    char line[128];
+    int position = 0;
+    int name_length = 0;
+    int digits = 0;
+    int value = 0;
+
+    if (fgets(line, 128, file) == NULL) {
+        return 1;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t') {
+        position++;
+    }
+
+    while (line[position] != ' ' && line[position] != '\t' &&
+           line[position] != '\n' && line[position] != '\r' &&
+           line[position] != '\0') {
+        if (name_length == capacity - 1) {
+            return 1;
+        }
+        name[name_length] = line[position];
+        name_length++;
+        position++;
+    }
+    name[name_length] = '\0';
+
+    if (name_length == 0 ||
+        (line[position] != ' ' && line[position] != '\t')) {
+        return 1;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t') {
+        position++;
+    }
+
+    while (line[position] >= '0' && line[position] <= '9') {
+        if (digits == 9) {
+            return 1;
+        }
+        value = value * 10 + (line[position] - '0');
+        digits++;
+        position++;
+    }
+
+    while (line[position] == ' ' || line[position] == '\t' ||
+           line[position] == '\r') {
+        position++;
+    }
+
+    if (value <= 0 ||
+        (line[position] != '\n' && (line[position] != '\0' || !feof(file)))) {
+        return 1;
+    }
+
+    *count = value;
+    return 0;
+}
+
+void free_shapes(struct ShapeLibrary *library)
+{
+    for (int i = 0; i < library->shape_count; i++) {
+        free(library->shapes[i].points);
+    }
+    free(library->shapes);
+    library->shapes = NULL;
+    library->shape_count = 0;
+}
+
+int read_shape(FILE *file, struct Shape *shape)
+{
+    if (read_name_and_count(file, shape->name, 64, &shape->point_count) != 0) {
+        return 1;
+    }
+
+    shape->points = calloc(shape->point_count, sizeof(struct StrokePoint));
+    if (shape->points == NULL) {
+        return 1;
+    }
+
+    for (int i = 0; i < shape->point_count; i++) {
+        struct StrokePoint *point = &shape->points[i];
+
+        if (fscanf(file, "%f %f %d", &point->x, &point->y, &point->pen) != 3) {
+            return 1;
+        }
+        if (point->pen != 0 && point->pen != 1) {
+            return 1;
+        }
+
+        int next = fgetc(file);
+        while (next == ' ' || next == '\t' || next == '\r') {
+            next = fgetc(file);
+        }
+        if (next != '\n' && !feof(file)) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+int load_shapes(char filename[], struct ShapeLibrary *library)
+{
+    char header[64];
+    int declared_count;
+
+    library->shape_count = 0;
+    library->shapes = NULL;
+
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        printf("Could not open %s\n", filename);
+        return 1;
+    }
+
+    if (read_name_and_count(file, header, 64, &declared_count) != 0 ||
+        strcmp(header, "NumShapes") != 0) {
+        fclose(file);
+        printf("Invalid NumShapes header\n");
+        return 1;
+    }
+
+    library->shapes = calloc(declared_count, sizeof(struct Shape));
+    if (library->shapes == NULL) {
+        fclose(file);
+        printf("Could not allocate the shape library\n");
+        return 1;
+    }
+
+    for (int i = 0; i < declared_count; i++) {
+        struct Shape *shape = &library->shapes[i];
+        shape->points = NULL;
+        library->shape_count++;
+
+        if (read_shape(file, shape) != 0) {
+            fclose(file);
+            free_shapes(library);
+            printf("Could not load shape %d\n", i + 1);
+            return 1;
+        }
+    }
+
+    fclose(file);
+    return 0;
+}
+
 int main()
 {
     char buffer[100];
- 
+
+        struct ShapeLibrary library;
+    if (load_shapes("test.txt", &library) != 0) {
+        return 1;
+    }
+
+    printf("Number of shapes: %d\n", library.shape_count);
+    int total_points = 0;
+    for (int i = 0; i < library.shape_count; i++) {
+        printf("Shape %d: %s, points: %d\n", i + 1,
+               library.shapes[i].name, library.shapes[i].point_count);
+        total_points += library.shapes[i].point_count;
+    }
+    printf("Total stroke points: %d\n", total_points);
+    free_shapes(&library);
+
     // If we cannot open the port then give up immediatly
     if ( CanRS232PortBeOpened() == -1 )
     {
