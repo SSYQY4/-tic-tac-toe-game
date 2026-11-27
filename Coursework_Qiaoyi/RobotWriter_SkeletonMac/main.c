@@ -184,6 +184,115 @@ int load_shapes(char filename[], struct ShapeLibrary *library)
     fclose(file);
     return 0;
 }
+// Function to draw a shape using the G-code
+void draw_shape(struct Shape *shape, float origin_x, float origin_y, float scale)
+{
+    char buffer[100];
+    int pen_down = 0;
+
+    sprintf(buffer, "G0 X%.3f Y%.3f\n", origin_x, origin_y);
+    SendCommands(buffer);
+
+    for (int i = 0; i < shape->point_count; i++) {
+        struct StrokePoint *point = &shape->points[i];
+        float x = origin_x + point->x * scale;
+        float y = origin_y + point->y * scale;
+
+        if (point->pen != pen_down) {
+            sprintf(buffer, "S%d\n", point->pen * 1000);
+            SendCommands(buffer);
+            pen_down = point->pen;
+        }
+
+        sprintf(buffer, "G%d X%.3f Y%.3f\n", point->pen, x, y);
+        SendCommands(buffer);
+    }
+
+    if (pen_down == 1) {
+        sprintf(buffer, "S0\n");
+        SendCommands(buffer);
+    }
+}
+
+// Function to define the size of shapes and where to start drawing
+void draw_shape_in_cell(struct Shape *shape, float board_size, int column, int row)
+{
+    struct StrokePoint *points = shape->points;
+    int count = shape->point_count;
+    float min_x = 0;
+    float max_x = 0;
+    float min_y = 0;
+    float max_y = 0;
+    int bounds_set = 0;
+
+    // If the first move draws a line, it starts at the local origin.
+    if (count > 0) {
+        if (points[0].pen == 1) {
+            bounds_set = 1;
+        }
+    }
+
+    for (int i = 0; i < count; i++) {
+        float x = points[i].x;
+        float y = points[i].y;
+        int pen = points[i].pen;
+        int starts_line = 0;
+
+        // Check that the next point exists before reading it.
+        if (i + 1 < count) {
+            if (points[i + 1].pen == 1) {
+                starts_line = 1;
+            }
+        }
+
+        if (pen == 1 || starts_line) {
+            if (!bounds_set) {
+                min_x = x;
+                max_x = x;
+                min_y = y;
+                max_y = y;
+                bounds_set = 1;
+            }
+
+            if (x < min_x) {
+                min_x = x;
+            }
+            if (x > max_x) {
+                max_x = x;
+            }
+            if (y < min_y) {
+                min_y = y;
+            }
+            if (y > max_y) {
+                max_y = y;
+            }
+        }
+    }
+
+    float width = max_x - min_x;
+    float height = max_y - min_y;
+    float longest_side = width;
+
+    if (height > longest_side) {
+        longest_side = height;
+    }
+    if (longest_side <= 0) {
+        printf("Shape has no drawable size\n");
+        return;
+    }
+
+    float cell_size = board_size / 3;
+    float margin = 2;
+    float scale = (cell_size - 2 * margin) / longest_side;
+
+    float centre_x = (column - 1) * cell_size + cell_size / 2;
+    float centre_y = -board_size + (row - 1) * cell_size + cell_size / 2;
+
+    float origin_x = centre_x - (min_x + max_x) / 2 * scale;
+    float origin_y = centre_y - (min_y + max_y) / 2 * scale;
+
+    draw_shape(shape, origin_x, origin_y, scale);
+}
 
 int main()
 {
@@ -202,12 +311,27 @@ int main()
         total_points += library.shapes[i].point_count;
     }
     printf("Total stroke points: %d\n", total_points);
-    free_shapes(&library);
+
+        char shape_name[] = "STAR";
+    struct Shape *selected_shape = NULL;
+
+    for (int i = 0; i < library.shape_count && selected_shape == NULL; i++) {
+        if (strcmp(library.shapes[i].name, shape_name) == 0) {
+            selected_shape = &library.shapes[i];
+        }
+    }
+
+    if (selected_shape == NULL) {
+        printf("%s was not found in test.txt\n", shape_name);
+        free_shapes(&library);
+        return 1;
+    }
 
     // If we cannot open the port then give up immediatly
     if ( CanRS232PortBeOpened() == -1 )
     {
         printf ("\nUnable to open the COM port (specified in serial.h) ");
+        free_shapes(&library);
         exit (0);
     }
 
@@ -240,25 +364,13 @@ int main()
 
     // These are sample commands to draw out some information 
     // This is the section that you will replace with your own code
-    sprintf (buffer, "G0 X2.5 Y-2.5\n");
+    draw_shape_in_cell(selected_shape, 60, 2, 2);
+        
+    sprintf(buffer, "G0 X0 Y0\n");
     SendCommands(buffer);
-    sprintf (buffer, "S1000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X7.5 Y-2.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X7.5 Y-7.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X2.5 Y-7.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X2.5 Y-2.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "S0\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G0 X0 Y0\n");
-    SendCommands(buffer);
+    free_shapes(&library);
     // End of sample g-code
     
-
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
     printf("Com port now closed\n");
