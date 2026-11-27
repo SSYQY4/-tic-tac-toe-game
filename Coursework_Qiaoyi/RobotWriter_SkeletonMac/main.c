@@ -214,6 +214,19 @@ void draw_shape(struct Shape *shape, float origin_x, float origin_y, float scale
     }
 }
 
+// Function to difine the size of shapes and where to start drawing
+void draw_shape_in_cell(struct Shape *shape, float board_size, int column, int row)
+{
+    float cell_size = board_size / 3;
+    float margin = 2;
+    float scale = (cell_size - 2 * margin) / 16;
+
+    float origin_x = (column - 1) * cell_size + margin;
+    float origin_y = -board_size + (row - 1) * cell_size + margin;
+
+    draw_shape(shape, origin_x, origin_y, scale);
+}
+
 int main()
 {
     char buffer[100];
@@ -281,13 +294,8 @@ int main()
 
     // These are sample commands to draw out some information 
     // This is the section that you will replace with your own code
-      float board_size = 90;
-    float cell_size = board_size / 3;
-    float margin = 2;
-    float scale = (cell_size - 2 * margin) / 16;
-
-    draw_shape(square, margin, -board_size + margin, scale);
-
+    draw_shape_in_cell(square, 60, 2, 2);
+        
     sprintf(buffer, "G0 X0 Y0\n");
     SendCommands(buffer);
     free_shapes(&library);
