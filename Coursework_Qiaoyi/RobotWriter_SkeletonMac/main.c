@@ -184,6 +184,35 @@ int load_shapes(char filename[], struct ShapeLibrary *library)
     fclose(file);
     return 0;
 }
+// Function to draw a shape using the G-code
+void draw_shape(struct Shape *shape, float origin_x, float origin_y, float scale)
+{
+    char buffer[100];
+    int pen_down = 0;
+
+    sprintf(buffer, "G0 X%.3f Y%.3f\n", origin_x, origin_y);
+    SendCommands(buffer);
+
+    for (int i = 0; i < shape->point_count; i++) {
+        struct StrokePoint *point = &shape->points[i];
+        float x = origin_x + point->x * scale;
+        float y = origin_y + point->y * scale;
+
+        if (point->pen != pen_down) {
+            sprintf(buffer, "S%d\n", point->pen * 1000);
+            SendCommands(buffer);
+            pen_down = point->pen;
+        }
+
+        sprintf(buffer, "G%d X%.3f Y%.3f\n", point->pen, x, y);
+        SendCommands(buffer);
+    }
+
+    if (pen_down == 1) {
+        sprintf(buffer, "S0\n");
+        SendCommands(buffer);
+    }
+}
 
 int main()
 {
@@ -202,12 +231,24 @@ int main()
         total_points += library.shapes[i].point_count;
     }
     printf("Total stroke points: %d\n", total_points);
-    free_shapes(&library);
+        struct Shape *square = NULL;
+    for (int i = 0; i < library.shape_count && square == NULL; i++) {
+        if (strcmp(library.shapes[i].name, "SQUARE") == 0) {
+            square = &library.shapes[i];
+        }
+    }
+
+    if (square == NULL) {
+        printf("SQUARE was not found in test.txt\n");
+        free_shapes(&library);
+        return 1;
+    }
 
     // If we cannot open the port then give up immediatly
     if ( CanRS232PortBeOpened() == -1 )
     {
         printf ("\nUnable to open the COM port (specified in serial.h) ");
+        free_shapes(&library);
         exit (0);
     }
 
@@ -240,25 +281,18 @@ int main()
 
     // These are sample commands to draw out some information 
     // This is the section that you will replace with your own code
-    sprintf (buffer, "G0 X2.5 Y-2.5\n");
+      float board_size = 90;
+    float cell_size = board_size / 3;
+    float margin = 2;
+    float scale = (cell_size - 2 * margin) / 16;
+
+    draw_shape(square, margin, -board_size + margin, scale);
+
+    sprintf(buffer, "G0 X0 Y0\n");
     SendCommands(buffer);
-    sprintf (buffer, "S1000\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X7.5 Y-2.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X7.5 Y-7.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X2.5 Y-7.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G1 X2.5 Y-2.5\n");
-    SendCommands(buffer);
-    sprintf (buffer, "S0\n");
-    SendCommands(buffer);
-    sprintf (buffer, "G0 X0 Y0\n");
-    SendCommands(buffer);
+    free_shapes(&library);
     // End of sample g-code
     
-
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
     printf("Com port now closed\n");
