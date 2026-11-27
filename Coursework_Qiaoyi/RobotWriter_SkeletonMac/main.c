@@ -244,15 +244,18 @@ int main()
         total_points += library.shapes[i].point_count;
     }
     printf("Total stroke points: %d\n", total_points);
-        struct Shape *square = NULL;
-    for (int i = 0; i < library.shape_count && square == NULL; i++) {
-        if (strcmp(library.shapes[i].name, "SQUARE") == 0) {
-            square = &library.shapes[i];
+
+        char shape_name[] = "STAR";
+    struct Shape *selected_shape = NULL;
+
+    for (int i = 0; i < library.shape_count && selected_shape == NULL; i++) {
+        if (strcmp(library.shapes[i].name, shape_name) == 0) {
+            selected_shape = &library.shapes[i];
         }
     }
 
-    if (square == NULL) {
-        printf("SQUARE was not found in test.txt\n");
+    if (selected_shape == NULL) {
+        printf("%s was not found in test.txt\n", shape_name);
         free_shapes(&library);
         return 1;
     }
@@ -294,7 +297,7 @@ int main()
 
     // These are sample commands to draw out some information 
     // This is the section that you will replace with your own code
-    draw_shape_in_cell(square, 60, 2, 2);
+    draw_shape_in_cell(selected_shape, 60, 2, 2);
         
     sprintf(buffer, "G0 X0 Y0\n");
     SendCommands(buffer);
